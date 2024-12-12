@@ -1,0 +1,719 @@
+---
+title: "Endangered Lang"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-12-08"
+---
+
+## Examining Endangered Language Dataset
+```{r}
+nyclang <- read.csv("/Users/cocohuang/Desktop/applied statistical methods/nyc-language-data.csv")
+
+library(dplyr)
+library(ggplot2)
+
+nyclangg <- nyclang %>%
+  mutate(Size = factor(Size, levels = c("Smallest", "Small", "Medium", "Large", "Largest")))
+
+
+# Aggregate the data to count countries in each Size category
+top_countries <- nyclangg %>%
+  group_by(Size, Country) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  arrange(Size, desc(Count)) %>%
+  group_by(Size) %>%
+  slice_head(n = 5)  # Select top 5 countries for each Size category
+
+# Plot the data
+ggplot(top_countries, aes(x = reorder(Country, Count), y = Count, fill = Size)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~Size, scales = "free_y") +  # One plot per Size category
+  coord_flip() +
+  labs(
+    title = "Top 5 Countries Represented in Each Size Category",
+    x = "Country",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+
+```
+
+### generating nyclang graph by countries
+```{r}
+library(ggplot2)
+
+# Aggregate data to count the number of languages per country
+country_language_counts <- nyclang_expanded %>%
+  group_by(Country) %>%
+  summarise(Language_Count = n_distinct(Language)) %>%
+  arrange(desc(Language_Count)) %>%
+  slice_head(n = 20) # Select top 20 countries
+
+# Create a bar plot
+ggplot(country_language_counts, aes(x = reorder(Country, -Language_Count), y = Language_Count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() + # Flip coordinates for better readability
+  labs(
+    title = "Top 20 Countries by Number of Languages Represented",
+    x = "Country",
+    y = "Number of Languages",
+    caption = "Data Source: nyclang_expanded"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+
+## Examining UNESCO dataset
+```{r}
+#import the four relative datasets that I downloaded from USI
+GDP <- read.csv("/Users/cocohuang/Desktop/applied statistical methods/GDP.csv")
+culture <- read.csv("/Users/cocohuang/Desktop/applied statistical methods/Culture.csv")
+school <- read.csv("/Users/cocohuang/Desktop/applied statistical methods/school.csv")
+media <- read.csv("/Users/cocohuang/Desktop/applied statistical methods/media.csv")
+```
+
+### Addressing school dataset
+```{r}
+#for school dataset, keep most recent years
+library(dplyr)
+
+# Filter the dataset to keep only the most recent year for each country
+school <- school %>%
+  group_by(Country) %>%
+  filter(TIME == max(TIME, na.rm = TRUE)) %>%
+  ungroup()
+
+school <- school %>%
+  filter(Indicator == "Mean years of schooling (ISCED 1 or higher), population 25+ years, both sexes")
+```
+
+### Addressing GDP Dataset
+```{r}
+#for the GDP dataset, 
+gdp_per_capita <- GDP %>%
+  filter(Indicator == "GDP per capita (current US$)") %>%
+  group_by(Country) %>%
+  filter(TIME == max(TIME, na.rm = TRUE)) %>%
+  ungroup ()
+
+gdp_growth <- GDP %>%
+  filter(Indicator == "GDP growth (annual %)") %>%
+  group_by(Country) %>%
+  filter(TIME == max(TIME, na.rm = TRUE)) %>%
+  ungroup()
+
+```
+
+
+### Addressing culture dataset
+```{r}
+culture <- culture %>% 
+  filter(Indicator == "Total per capita public expenditure at national/federal level on cultural and natural heritage (constant PPP$ - 2017)") %>%
+  group_by(Country) %>%
+  filter(TIME == max(TIME, na.rm = TRUE)) %>%
+  ungroup()
+
+```
+
+
+### Addressing media dataset 
+```{r}
+#most counts of unique country
+inst <- media %>% 
+  filter(Indicator == "Total number of radio and television institutions") %>%
+  group_by(Country) %>%
+  filter(TIME == max(TIME, na.rm = TRUE)) %>%
+  ungroup()
+
+```
+
+### Modifying nyclang dataset 
+```{r}
+
+library(tidyr)
+library(dplyr)
+
+nyclang <- nyclang %>%
+  mutate(Country = as.character(Country))
+
+nyclang_cleaned <- nyclang %>%
+  mutate(Country = gsub("\\n", ", ", Country)) # Replace \n with ", "
+
+# Step 2: Split the Country column and remove trailing commas
+nyclang_expanded <- nyclang_cleaned %>%
+  separate_rows(Country, sep = ", ") %>% # Split on ", " as the delimiter
+  mutate(
+    Country = trimws(Country),          # Remove any leading/trailing whitespace
+    Country = gsub(",$", "", Country)   # Remove trailing commas
+  ) %>%
+  arrange(Language, Location, Country)  # Sort by Language, Location, Country
+```
+
+
+### Appending UNESCO data to nyclang
+```{r}
+
+library(dplyr)
+
+# Standardize country names
+nyclang_expanded <- nyclang_expanded %>%
+  mutate(Country = case_when(
+    Country == "Russia" ~ "Russian Federation",
+    Country == "Ivory Coast" ~ "Côte d'Ivoire",
+    Country == "United States" ~ "United States of America",
+    Country == "Syria" ~ "Syrian Arab Republic",
+    Country == "Iran" ~ "Iran (Islamic Republic of)",
+    Country == "Bolivia" ~ "Bolivia (Plurinational State of)",
+    Country == "D.R. Congo" ~ "Democratic Republic of the Congo",
+    Country == "Hong Kong" ~ "China, Hong Kong Special Administrative Region",
+    Country == "Cape Verde Islands" ~ "Cabo Verde",
+    Country == "Micronesia" ~ "Micronesia (Federated States of)",
+    Country == "Czech Republic" ~ "Czechia",
+    Country == "United Kingdom" ~ "United Kingdom of Great Britain and Northern Ireland",
+    Country == "Tanzania" ~ "United Republic of Tanzania",
+    Country == "South Korea" ~ "Republic of Korea",
+    Country == "Vietnam" ~ "Viet Nam",
+    Country == "Laos" ~ "Lao People's Democratic Republic",
+    Country == "Brunei" ~ "Brunei Darussalam",
+    Country == "Moldova" ~ "Republic of Moldova",
+    Country == "Venezuela" ~ "Venezuela (Bolivarian Republic of)",
+    Country == "Turkey" ~ "Türkiye",
+    Country == "Congo (Brazzaville)" ~ "Congo",
+    TRUE ~ Country
+  ))
+
+
+# Create a function to perform the join
+append_indicator <- function(main_df, add_df) {
+  # Extract the indicator name
+  indicator_name <- unique(add_df$Indicator)
+  
+  # Ensure there's exactly one unique indicator in the dataset
+  if (length(indicator_name) != 1) {
+    stop("Each dataset must have exactly one unique Indicator.")
+  }
+  
+  # Rename the 'Value' column to the Indicator name
+  add_df <- add_df %>%
+    select(Country, Value) %>%
+    rename(!!indicator_name := Value)
+  
+  # Perform the left join
+  main_df <- main_df %>%
+    left_join(add_df, by = "Country")
+  
+  return(main_df)
+}
+
+# Start with nyclang_expanded dataset
+nyclang_expanded_with_indicators <- nyclang_expanded
+
+# Append each dataset
+datasets <- list(school, gdp_per_capita, gdp_growth, culture, inst)
+
+for (dataset in datasets) {
+  nyclang_expanded_with_indicators <- append_indicator(nyclang_expanded_with_indicators, dataset)
+}
+
+nyclang_unesco <- nyclang_expanded_with_indicators
+
+```
+
+## Model for NYC Community Size
+
+```{r}
+library(dplyr)
+library(stringr)
+
+nyclang_unesco$Size <- factor(nyclang_unesco$Size, levels = c("Smallest", "Small", "Medium", "Large", "Largest"))
+
+nyclang_unesco <- nyclang_unesco %>%
+  mutate(Global.Speakers = as.numeric(str_replace_all(Global.Speakers, ",", "")))
+
+
+# Rename the columns to shorter, more manageable names
+library(dplyr)
+
+nyclang_unesco <- nyclang_unesco %>%
+  rename(
+    MeanSchooling = "Mean years of schooling (ISCED 1 or higher), population 25+ years, both sexes",
+    GDPPerCapita = "GDP per capita (current US$)",
+    GDPGrowth = "GDP growth (annual %)",
+    CulturalExpenditure = "Total per capita public expenditure at national/federal level on cultural and natural heritage (constant PPP$ - 2017)",
+    NumMediaInstitutions = "Total number of radio and television institutions"
+  )
+
+```
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(ordinal)
+library(ggplot2)
+library(mice)
+library(stringr)
+library(lme4)
+
+# Ensure Size is properly treated as an ordered factor
+nyclang_unesco$Size <- factor(nyclang_unesco$Size, 
+                              levels = c("Smallest", "Small", "Medium", "Large", "Largest"),
+                              ordered = TRUE)
+
+# --- Model 1: Global.Speakers (Log-transformed) ---
+data_gs <- nyclang_unesco %>%
+  filter(!is.na(Global.Speakers) & !is.na(Size)) %>%
+  filter(Global.Speakers < 1e7)  # Keep Global.Speakers below 10 million
+
+# Apply log transformation to Global.Speakers (with +1 to avoid log(0))
+data_gs <- data_gs %>%
+  mutate(log_Global_Speakers = log(Global.Speakers + 1))
+
+# Fit the model with the log-transformed Global.Speakers
+model_gs <- clm(Size ~ log_Global_Speakers, data = data_gs, control = list(maxit = 500))
+
+# Summarize the model results
+summary_gs <- tidy(model_gs) %>%
+  mutate(indicator = "log_Global_Speakers")
+
+
+
+# --- Model 2: Mean Schooling ---
+data_ms <- nyclang_unesco %>%
+  filter(!is.na(MeanSchooling) & !is.na(Size))
+model_ms <- clm(Size ~ MeanSchooling, data = data_ms)
+summary_ms <- tidy(model_ms) %>%
+  mutate(indicator = "MeanSchooling")
+
+# --- Model 3: GDPPerCapita ---
+data_gdp <- nyclang_unesco %>%
+  filter(!is.na(GDPPerCapita) & !is.na(Size)) %>%
+  mutate(log_GDPPerCapita = log(GDPPerCapita + 1))
+
+model_gdp <- clm(Size ~ log_GDPPerCapita, data = data_gdp, control = list(maxit = 500))
+summary_gdp <- tidy(model_gdp) %>%
+  mutate(indicator = "GDPPerCapita")
+
+# --- Model 4: GDPGrowth ---
+data_gg <- nyclang_unesco %>%
+  filter(!is.na(GDPGrowth) & !is.na(Size))
+model_gg <- clm(Size ~ GDPGrowth, data = data_gg)
+summary_gg <- tidy(model_gg) %>%
+  mutate(indicator = "GDPGrowth")
+
+
+# --- Model 5: NumMediaInstitutions ---
+data_nmi <- nyclang_unesco %>%
+  filter(!is.na(NumMediaInstitutions) & !is.na(Size)) %>%
+  mutate(log_NumMediaInstitutions = log(NumMediaInstitutions + 1))
+model_nmi <- clm(Size ~ log_NumMediaInstitutions, data = data_nmi, control = list(maxit = 500))
+summary_nmi <- tidy(model_nmi) %>%
+  mutate(indicator = "NumMediaInstitutions")
+
+# Combine all model summaries
+# Extract only the main effect terms from the model and compute confidence intervals
+summary_gs <- tidy(model_gs) %>%
+  filter(term == "log_Global_Speakers") %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error,
+    indicator = "log_Global_Speakers"
+  )
+
+summary_ms <- tidy(model_ms) %>%
+  filter(term == "MeanSchooling") %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error,
+    indicator = "MeanSchooling"
+  )
+
+summary_gdp <- tidy(model_gdp) %>%
+  filter(term == "log_GDPPerCapita") %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error,
+    indicator = "GDPPerCapita"
+  )
+
+summary_gg <- tidy(model_gg) %>%
+  filter(term == "GDPGrowth") %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error,
+    indicator = "GDPGrowth"
+  )
+
+summary_nmi <- tidy(model_nmi) %>%
+  filter(term == "log_NumMediaInstitutions") %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error,
+    indicator = "NumMediaInstitutions"
+  )
+
+# Combine all model summaries for plotting
+all_models <- bind_rows(summary_gs, summary_ms, summary_gdp, summary_gg, summary_nmi)
+
+# Load required libraries
+library(RColorBrewer)
+
+# Visualize the estimates with updated color scheme
+ggplot(all_models, aes(x = indicator, y = estimate, ymin = conf.low, ymax = conf.high, color = indicator)) +
+  geom_pointrange(position = position_dodge(width = 0.4), size = 1) +
+  coord_flip() +
+  labs(
+    title = "Estimated Coefficients with Confidence Intervals for Predictors of Size",
+    x = "Indicator Variable",
+    y = "Estimated Coefficient"
+  ) +
+  scale_color_brewer(palette = "Set1") +  # Use a colorful palette
+  theme_minimal() +
+  theme(legend.position = "bottom")  # Position legend at the bottom
+```
+
+
+
+
+
+
+
+### reason for log.. skewed
+```{r}
+# Load necessary libraries
+library(ggplot2)
+
+# Create a histogram for Global.Speakers
+ggplot(data_gdp, aes(x = Global.Speakers)) +
+  geom_histogram(binwidth = 100000, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of Global Speakers", x = "Global Speakers", y = "Frequency") +
+  theme_minimal()
+
+
+```
+
+### Skewness continued
+```{r}
+
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+library(e1071)  # For skewness function
+
+# Calculate skewness for each relevant variable in your data
+skew_values <- tibble(
+  Indicator = c("Global.Speakers", "MeanSchooling", "GDPPerCapita", "GDPGrowth", "NumMediaInstitutions"),
+  Skewness = c(
+    skewness(nyclang_unesco$Global.Speakers, na.rm = TRUE),
+    skewness(nyclang_unesco$MeanSchooling, na.rm = TRUE),
+    skewness(nyclang_unesco$GDPPerCapita, na.rm = TRUE),
+    skewness(nyclang_unesco$GDPGrowth, na.rm = TRUE),
+    skewness(nyclang_unesco$NumMediaInstitutions, na.rm = TRUE)
+  )
+)
+
+# Create a bar plot to compare skewness values
+ggplot(skew_values, aes(x = Indicator, y = Skewness, fill = Indicator)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(title = "Skewness Comparison of Variables", x = "Variable", y = "Skewness Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+## Thresholds comparison
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Extract threshold coefficients from the models
+extract_thresholds <- function(model, indicator) {
+  # Get the threshold coefficients
+  thresholds <- model$alpha
+  
+  # Create a dataframe of thresholds
+  threshold_df <- data.frame(
+    category = c("Smallest|Small", "Small|Medium", "Medium|Large", "Large|Largest"),
+    threshold = thresholds,
+    indicator = indicator
+  )
+  
+  return(threshold_df)
+}
+
+# Extract thresholds from each model
+thresholds_gs <- extract_thresholds(model_gs, "Global.Speakers")
+thresholds_ms <- extract_thresholds(model_ms, "MeanSchooling")
+thresholds_gdp <- extract_thresholds(model_gdp, "GDPPerCapita")
+thresholds_gg <- extract_thresholds(model_gg, "GDPGrowth")
+thresholds_nmi <- extract_thresholds(model_nmi, "NumMediaInstitutions")
+
+# Combine all thresholds
+all_thresholds <- bind_rows(
+  thresholds_gs, thresholds_ms, thresholds_gdp, 
+  thresholds_gg, thresholds_nmi
+)
+
+# Create a heatmap-style plot of threshold coefficients
+ggplot(all_thresholds, aes(x = indicator, y = category, fill = threshold)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(
+    low = "blue", 
+    mid = "white", 
+    high = "red", 
+    midpoint = 0,
+    name = "Threshold Coefficient"
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Threshold Coefficients Across Indicators and Category Boundaries",
+    x = "Indicator",
+    y = "Category Boundary"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# Create a bar plot for easier comparison
+ggplot(all_thresholds, aes(x = category, y = threshold, fill = indicator)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  theme_minimal() +
+  labs(
+    title = "Threshold Coefficients by Indicator and Category Boundary",
+    x = "Category Boundary",
+    y = "Threshold Coefficient",
+    fill = "Indicator"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  )
+
+# Optionally, create a faceted plot for more detailed view
+ggplot(all_thresholds, aes(x = category, y = threshold)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  facet_wrap(~ indicator, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Threshold Coefficients by Indicator",
+    x = "Category Boundary",
+    y = "Threshold Coefficient"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5),
+    strip.text = element_text(face = "bold")
+  )
+
+```
+
+
+
+
+
+### AIC BIC of all CLM models
+```{r}
+# Create a data frame for AIC and BIC comparison
+clm_comparison <- data.frame(
+  Indicator = c("Global.Speakers", "MeanSchooling", "GDPPerCapita", "GDPGrowth", "NumMediaInstitutions"),
+  AIC = c(AIC(model_gs), AIC(model_ms), AIC(model_gdp), AIC(model_gg), AIC(model_nmi)),
+  BIC = c(BIC(model_gs), BIC(model_ms), BIC(model_gdp), BIC(model_gg), BIC(model_nmi))
+)
+
+# Reshape data for plotting
+clm_comparison_long <- clm_comparison %>%
+  tidyr::pivot_longer(
+    cols = c(AIC, BIC),
+    names_to = "Criterion",
+    values_to = "Value"
+  )
+
+# Plot AIC and BIC comparison
+ggplot(clm_comparison_long, aes(x = Indicator, y = Value, fill = Criterion)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "AIC and BIC Comparison for CLM Models",
+    subtitle = "Lower AIC/BIC indicates better model fit",
+    x = "Indicator",
+    y = "Value",
+    fill = "Criterion"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, hjust = 0.5)
+  )
+
+
+
+
+
+```
+
+
+
+
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(mice)
+library(purrr) 
+
+# Create a table with p-values for each model
+p_values_summary <- bind_rows(
+  summary_gs %>% mutate(p_value = ifelse(is.na(p.value), NA, p.value), indicator = "Global.Speakers"),
+  summary_ms %>% mutate(p_value = ifelse(is.na(p.value), NA, p.value), indicator = "MeanSchooling"),
+  summary_gdp %>% mutate(p_value = ifelse(is.na(p.value), NA, p.value), indicator = "GDPPerCapita"),
+  summary_gg %>% mutate(p_value = ifelse(is.na(p.value), NA, p.value), indicator = "GDPGrowth"),
+  summary_nmi %>% mutate(p_value = ifelse(is.na(p.value), NA, p.value), indicator = "NumMediaInstitutions")
+)
+
+# Select only relevant columns for visualization
+p_values_summary_table <- p_values_summary %>%
+  select(indicator, term, p_value) %>%
+  distinct()  # Get unique rows if there are duplicates
+
+# Print the table
+print(p_values_summary_table)
+
+
+```
+
+
+##Let's address multicollinearity
+```{r}
+cor_matrix <- cor(nyclang_unesco %>%
+                  select(Global.Speakers, MeanSchooling, GDPPerCapita, GDPGrowth, NumMediaInstitutions), 
+                use = "complete.obs")
+print(cor_matrix)
+
+# Visualize correlations
+library(corrplot)
+corrplot(cor_matrix, method = "number", type = "upper")
+```
+
+
+```{r}
+
+sapply(nyclang_unesco, function(x) sum(is.na(x)))
+
+```
+too many NAs in CulturalExpenditure and NumMediaInstitutions
+we will do a combined model only for GDPPerCapita and GDPGrowth and interaction term. 
+
+```{r}
+# Load required libraries
+library(randomForest)  # For Random Forest
+library(caret)        # For model evaluation and splitting
+library(dplyr)        # For data wrangling
+library(ggplot2)      # Visualization (optional)
+
+# Ensure that the target variable is a factor
+nyclang_unesco <- nyclang_unesco %>%
+  mutate(Size = factor(Size)) # Ensure the dependent variable is categorical for classification tasks
+
+# Handle NAs only in GDPPerCapita and GDPGrowth columns
+data_clean <- nyclang_unesco %>%
+  filter(!is.na(GDPPerCapita) & !is.na(GDPGrowth)) # Remove rows with missing GDPPerCapita or GDPGrowth
+
+# Split data into training and testing sets (e.g., 70/30 split)
+set.seed(123) # For reproducibility
+train_index <- createDataPartition(data_clean$Size, p = 0.7, list = FALSE)
+train_data <- data_clean[train_index, ]
+test_data <- data_clean[-train_index, ]
+
+# Train a Random Forest model
+rf_model <- randomForest(Size ~ GDPPerCapita + GDPGrowth, 
+                          data = train_data, 
+                          importance = TRUE, # Assess feature importance
+                          ntree = 500)      # Number of trees to grow
+
+# Print model summary
+print(rf_model)
+
+# Evaluate the model performance on test data
+rf_predictions <- predict(rf_model, test_data)
+
+# Compare predictions to actual values using a confusion matrix
+confusion_mat <- confusionMatrix(rf_predictions, test_data$Size)
+print(confusion_mat)
+
+# Baseline Model - Predict the most frequent class (mode)
+baseline_prediction <- rep(names(sort(table(train_data$Size), decreasing = TRUE))[1], nrow(test_data))
+baseline_confusion <- confusionMatrix(factor(baseline_prediction), test_data$Size)
+print(baseline_confusion)
+
+# Compare Random Forest performance with baseline accuracy
+rf_accuracy <- confusion_mat$overall['Accuracy']
+baseline_accuracy <- baseline_confusion$overall['Accuracy']
+
+cat("Random Forest Accuracy: ", rf_accuracy, "\n")
+cat("Baseline Model Accuracy: ", baseline_accuracy, "\n")
+```
+
+### heatmap for random forest
+```{r}
+# Convert confusion matrix to a data frame
+conf_mat_df <- as.data.frame(confusion_mat$table)
+colnames(conf_mat_df) <- c("Predicted", "Actual", "Frequency")
+
+# Plot the confusion matrix as a heatmap
+library(ggplot2)
+ggplot(conf_mat_df, aes(x = Actual, y = Predicted, fill = Frequency)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Frequency), color = "black", size = 4) +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(
+    title = "Confusion Matrix Heatmap",
+    x = "Actual Class",
+    y = "Predicted Class",
+    fill = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+
+
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(ordinal)  # For cumulative link models (clm)
+library(dplyr)    # For data manipulation
+
+
+# Ensure that the target variable is a factor
+nyclang_unesco <- nyclang_unesco %>%
+  mutate(Size = factor(Size)) # Ensure the dependent variable is categorical for classification tasks
+
+# Handle NAs only in GDPPerCapita and GDPGrowth columns
+data_clean <- nyclang_unesco %>%
+  filter(!is.na(GDPPerCapita) & !is.na(GDPGrowth)) # Remove rows with missing GDPPerCapita or GDPGrowth
+
+
+# Fit the cumulative link model with interaction term
+baseline_model <- clm(Size ~ GDPPerCapita * GDPGrowth, 
+                       data = data_clean, 
+                       control = list(maxit = 500))
+
+# Summarize the model
+summary(baseline_model)
+
+
+```
